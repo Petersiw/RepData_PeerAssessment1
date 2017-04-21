@@ -1,25 +1,148 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
+title: "Course Project 1"
+output:
   html_document:
-    keep_md: true
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+  pdf_document: default
 ---
 
+#Load Required Packages
 
-## Loading and preprocessing the data
+```{r}
+library(dplyr)
+```
 
+#Download and Load Data
 
+```{r}
+url1 = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+if(!file.exists("activity.zip")) {download.file(url1, destfile = "activity.zip")}
+unzip("activity.zip")
+activity <- read.csv("activity.csv")
+```
 
-## What is mean total number of steps taken per day?
+#Histogram of Total Steps
 
+```{r, warning = F}
+#calculate total number of steps
+total.steps <- data.frame(with(activity, tapply(steps, date, sum, na.rm = T)))
+colnames(total.steps) <- c("Sum")
+#plot histogram
+hist(total.steps$Sum, breaks = 10, xlab = "Total Number of Steps",
+     main = "Histogram of Total Steps", col = "steelblue")
+```
 
+#Mean and Median of Steps
 
-## What is the average daily activity pattern?
+```{r}
+#mean number of steps
+mean.s <- activity %>%
+  group_by(as.factor(date)) %>%
+  summarise(mean.step = mean(steps, na.rm = T))
+print(mean.s)
+#median number of steps
+median.s <- activity %>%
+  group_by(as.factor(date)) %>%
+  summarise(median.step = median(steps, na.rm = T))
+print(median.s)
+```
 
+#Time-Series Plot of Average Steps
 
+```{r}
+#average steps across different intervals
+mean.s.daily <- data.frame(with(activity, tapply(steps, interval, mean, 
+                                                 na.rm = T)))
+plot(mean.s.daily, type = "l", xlab = "Time Interval", ylab = "Average Steps",
+     main = "Average Steps Across Time")
+```
 
-## Imputing missing values
+#Interval With the Most Steps
 
+```{r}
+colnames(mean.s.daily) <- make.names("mean.steps.daily")
+#sort of maximum steps
+max.steps <- mean.s.daily[which.max(mean.s.daily$mean.steps.daily), ]
+```
 
+The maximum number of steps was at `r max.steps` with interval 835.
 
-## Are there differences in activity patterns between weekdays and weekends?
+#Total Rows With NAs
+
+```{r}
+#sum number of NAs
+na.rows <- sum(!complete.cases(activity))
+```
+
+The total number of NAs in the data was `r na.rows`.
+
+#Replace NAs With Mean Values In New Dataset
+
+```{r}
+#create new dataset
+n.activity <- activity
+#replace NAs by mean values
+n.activity$steps <- with(n.activity, 
+                       ifelse(is.na(steps), 
+                              ave(steps, interval, 
+                                  FUN = function(x) mean(x, na.rm = T)), 
+                              steps))
+```
+
+#Histogram of New Dataset
+
+```{r}
+#calculate total number of steps
+total.steps.n <- data.frame(with(n.activity, tapply(steps, date, sum, 
+                                                  na.rm = T)))
+colnames(total.steps.n) <- c("Sum")
+#plot histogram
+hist(total.steps.n$Sum, breaks = 10, xlab = "Total Number of Steps",
+     main = "Histogram of Total Steps With New Dataset", col = "steelblue")
+```
+
+The histogram looks more unimodal now with most of the total steps being around 10000.
+
+#Mean and Median Steps of New Dataset
+
+```{r}
+#mean number of steps
+mean.s.n <- n.activity %>%
+  group_by(as.factor(date)) %>%
+  summarise(mean.step = mean(steps, na.rm = T))
+print(mean.s.n)
+#median number of steps
+median.s.n <- n.activity %>%
+  group_by(as.factor(date)) %>%
+  summarise(median.step = median(steps, na.rm = T))
+print(median.s.n)
+```
+
+The beginning values of mean steps is now a number, instead of being not a number (NaN). The median number of steps begin to have values other than just zero. NAs seems to affect this dataset a lot by skewing the dataset.
+
+#Create Factor Variables of Weekdays and Weekends
+
+```{r}
+#convert date to date format
+n.activity$date <- as.POSIXct(strptime(n.activity$date, "%Y-%m-%d"))
+#create factor variable for weekday and weekend
+n.activity$wd <- ifelse(weekdays(n.activity$date, abbreviate = T) ==
+                          c("Fri", "Sat", "Sun"), "weekend", "weekday")
+```
+
+#Plot Average Steps for Weekday and Weekend
+
+```{r}
+n.split <- (split(n.activity, n.activity$wd))
+mean.weekday <- tapply((n.split$weekday)$steps, (n.split$weekday)$interval,
+                       mean)
+mean.weekend <- tapply((n.split$weekend)$steps, (n.split$weekend)$interval,
+                       mean)
+par(mfrow = c(1, 2))
+plot(mean.weekday, type = "l", ylab = "Number of Steps",
+     xlab = "Interval", main = "Steps on Weekdays", ylim = c(0, 250))
+plot(mean.weekend, type = "l", ylab = "Number of Steps",
+     xlab = "Interval", main = "Steps on Weekends", ylim = c(0, 250))
+```
